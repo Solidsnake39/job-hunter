@@ -1,128 +1,244 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import type { JobOffer } from '../types';
+import { CITY_COORDINATES, getScatterOffset, type GeoCoord } from '../utils/geoUtils';
 
+// --- Fix Leaflet Default Icon Issues in Webpack/Vite ---
+// @ts-ignore
+import iconMarker2x from 'leaflet/dist/images/marker-icon-2x.png';
+// @ts-ignore
+import iconMarker from 'leaflet/dist/images/marker-icon.png';
+// @ts-ignore
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: iconMarker2x,
+    iconUrl: iconMarker,
+    shadowUrl: iconShadow,
+});
 
 interface MapViewProps {
     jobs: JobOffer[];
     onJobClick: (job: JobOffer) => void;
 }
 
-// Approximate coords for "Belgium" simplified view (0-100 range for CSS %, relative to a box)
-// Let's assume a box covering roughly 50-51.5 N, 2.5-6.5 E
-// We'll map locations to top/left percentages.
-const CITY_COORDS: Record<string, { top: number, left: number }> = {
-    'bruxelles': { top: 40, left: 50 },
-    'antwerpen': { top: 20, left: 52 },
-    'gand': { top: 30, left: 35 },
-    'charleroi': { top: 65, left: 52 },
-    'liège': { top: 45, left: 75 },
-    'namur': { top: 60, left: 60 },
-    'mons': { top: 65, left: 40 },
-    'tournai': { top: 60, left: 25 },
-    'bouge': { top: 60, left: 62 },
-    'zaventem': { top: 38, left: 53 },
-    'diegem': { top: 38, left: 53 },
-    'obourg': { top: 62, left: 42 }, // Home base
-    'nivelles': { top: 55, left: 48 },
-    'wavre': { top: 50, left: 55 },
-    'leuven': { top: 38, left: 60 },
-    'asse': { top: 35, left: 45 },
-    'halle': { top: 45, left: 45 },
-    'kortrijk': { top: 45, left: 20 },
-    'arlon': { top: 85, left: 85 }
+// Custom Icons
+const createClusterIcon = (count: number) => {
+    return L.divIcon({
+        html: `<div class="flex items-center justify-center w-full h-full bg-red-600 text-white rounded-full font-bold shadow-lg border-2 border-white text-sm">${count}</div>`,
+        className: 'custom-cluster-icon',
+        iconSize: [40, 40],
+        iconAnchor: [20, 20]
+    });
+};
+
+const homeIcon = L.divIcon({
+    html: `<div class="w-6 h-6 bg-indigo-600 rounded-full border-2 border-white shadow-xl flex items-center justify-center">
+             <div class="absolute -inset-4 bg-indigo-500/20 rounded-full animate-ping"></div>
+             <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+           </div>`,
+    className: 'custom-home-icon',
+    iconSize: [24, 24],
+    iconAnchor: [12, 12]
+});
+
+const jobIcon = (status: string) => L.divIcon({
+    html: `<div class="w-4 h-4 ${status === 'APPLIED' ? 'bg-green-500' : 'bg-red-500'} rounded-full border-2 border-white shadow-md hover:scale-125 transition-transform"></div>`,
+    className: 'custom-job-icon',
+    iconSize: [16, 16],
+    iconAnchor: [8, 8]
+});
+
+
+// --- Sub-components for Map Logic ---
+
+const ZoomHandler = ({ setZoom }: { setZoom: (z: number) => void }) => {
+    useMapEvents({
+        zoomend: (e) => {
+            setZoom(e.target.getZoom());
+        }
+    });
+    return null;
+};
+
+const RecenterBtn = () => {
+    const map = useMap();
+    return (
+        <button
+            onClick={(e) => {
+                e.stopPropagation();
+                map.setView([50.8503, 4.3517], 8);
+            }}
+            className="absolute top-4 right-4 z-[400] bg-white/90 backdrop-blur text-slate-700 px-3 py-1.5 rounded-lg shadow-md border border-slate-200 font-bold text-xs hover:bg-slate-50 transition-all flex items-center gap-2"
+        >
+            <span>Reset Vue</span>
+        </button>
+    );
+};
+
+// Component to handle Cluster clicks cleanly using useMap
+const ClusterMarker = ({ cluster }: { cluster: any }) => {
+    const map = useMap();
+    return (
+        <Marker
+            position={[cluster.center.lat, cluster.center.lng]}
+            icon={createClusterIcon(cluster.count)}
+            eventHandlers={{
+                click: () => {
+                    map.flyTo([cluster.center.lat, cluster.center.lng], 12);
+                }
+            }}
+        >
+            <Popup>
+                <div className="p-1">
+                    <h3 className="font-bold text-gray-800 capitalize mb-1">{cluster.city}</h3>
+                    <p className="text-xs text-gray-500">{cluster.count} offres d'emploi</p>
+                    <div className="mt-2 text-[10px] text-blue-500 cursor-pointer">
+                        Cliquez pour zoomer
+                    </div>
+                </div>
+            </Popup>
+        </Marker>
+    );
 };
 
 export const MapView: React.FC<MapViewProps> = ({ jobs, onJobClick }) => {
+    const [currentZoom, setCurrentZoom] = useState(8);
 
-    // Group jobs by simplified location key
-    const clusters: Record<string, JobOffer[]> = {};
-    const unknowns: JobOffer[] = [];
+    // 1. Prepare Data: Map jobs to coordinates (or group them)
+    // Structure: Record<CityName, { center: GeoCoord, jobs: JobOffer[] }>
+    const cityGroups = useMemo(() => {
+        const groups: Record<string, { center: GeoCoord, jobs: JobOffer[] }> = {};
 
-    jobs.forEach(job => {
-        const cityKey = Object.keys(CITY_COORDS).find(k => job.location.toLowerCase().includes(k));
-        if (cityKey) {
-            if (!clusters[cityKey]) clusters[cityKey] = [];
-            clusters[cityKey].push(job);
-        } else {
-            unknowns.push(job);
-        }
-    });
+        jobs.forEach(job => {
+            // Find coordinate match
+            const cityKey = Object.keys(CITY_COORDINATES).find(k => job.location.toLowerCase().includes(k));
+            const coords = cityKey ? CITY_COORDINATES[cityKey] : null;
+
+            if (coords && cityKey) {
+                if (!groups[cityKey]) {
+                    groups[cityKey] = { center: coords, jobs: [] };
+                }
+                groups[cityKey].jobs.push(job);
+            }
+        });
+        return groups;
+    }, [jobs]);
+
+    // Data for "Cluster View" (Low Zoom)
+    const clusters = Object.entries(cityGroups).map(([city, data]) => ({
+        city,
+        center: data.center,
+        count: data.jobs.length,
+        jobs: data.jobs
+    }));
+
+    // Data for "Scatter View" (High Zoom) - Flattens all jobs with offsets
+    const scatterPoints = useMemo(() => {
+        return jobs.map(job => {
+            const cityKey = Object.keys(CITY_COORDINATES).find(k => job.location.toLowerCase().includes(k));
+            const baseCoords = cityKey ? CITY_COORDINATES[cityKey] : null;
+
+            if (!baseCoords) return null;
+
+            const offset = getScatterOffset(job.id || 'unknown', 0.02); // 0.02 deg is approx 2km radius spread
+            return {
+                job,
+                lat: baseCoords.lat + offset.lat,
+                lng: baseCoords.lng + offset.lng
+            };
+        }).filter(Boolean) as { job: JobOffer, lat: number, lng: number }[];
+    }, [jobs]);
+
+
+    // THRESHOLD TO SWITCH VIEWS
+    const ZOOM_THRESHOLD = 10;
+    const showClusters = currentZoom < ZOOM_THRESHOLD;
 
     return (
-        <div className="relative w-full h-full bg-slate-100 overflow-hidden flex flex-col">
-            {/* Map Container */}
-            <div className="flex-1 relative m-4 bg-white rounded-2xl shadow-inner border border-slate-200 overflow-hidden">
-                <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-200 via-transparent to-transparent" />
+        <div className="relative w-full h-full bg-slate-100 flex flex-col overflow-hidden">
+            <div className="flex-1 relative m-4 bg-white rounded-2xl shadow-inner border border-slate-200 overflow-hidden z-0">
 
-                {/* Simplified Belgium Map Background (CSS Shape or SVG) */}
-                <div className="absolute inset-10 border-4 border-slate-100 rounded-[30%] opacity-50" />
-                <div className="absolute top-[40%] left-[50%] text-[100px] font-bold text-slate-50 opacity-10 select-none pointer-events-none transform -translate-x-1/2 -translate-y-1/2">
-                    BELGIQUE
-                </div>
-
-                {/* Home Base */}
-                <div
-                    className="absolute w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg z-10 flex items-center justify-center animate-pulse"
-                    style={{ top: `${CITY_COORDS['obourg'].top}%`, left: `${CITY_COORDS['obourg'].left}%` }}
-                    title="Obourg (Domicile)"
+                <MapContainer
+                    center={[50.8503, 4.3517]} // Center of Belgium
+                    zoom={8}
+                    scrollWheelZoom={true}
+                    className="w-full h-full"
+                    zoomControl={false}
                 >
-                    <div className="absolute -inset-4 bg-blue-500/20 rounded-full animate-ping" />
-                </div>
+                    {/* Clean Map Style: CartoDB Positron */}
+                    <TileLayer
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                    />
 
-                {/* Job Clusters */}
-                {Object.entries(clusters).map(([city, clusterJobs]) => {
-                    const coords = CITY_COORDS[city];
-                    const size = Math.min(60, 24 + clusterJobs.length * 4); // Scale size by job count
+                    <ZoomHandler setZoom={setCurrentZoom} />
+                    <RecenterBtn />
 
-                    return (
-                        <div
-                            key={city}
-                            className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
-                            style={{ top: `${coords.top}%`, left: `${coords.left}%` }}
-                            onClick={() => onJobClick(clusterJobs[0])} // Open first one or list? For now simple click
-                        >
-                            <div
-                                className="rounded-full bg-white/90 backdrop-blur-sm border-2 border-red-500 shadow-md flex items-center justify-center transition-all hover:scale-110 hover:bg-red-50"
-                                style={{ width: size, height: size }}
+                    {/* ALWAYS VISIBLE: HOME */}
+                    <Marker position={[50.4761, 4.0061]} icon={homeIcon}>
+                        <Popup className="custom-popup">
+                            <div className="font-bold text-indigo-600">Domicile</div>
+                            <div className="text-xs text-slate-500">Obourg</div>
+                        </Popup>
+                    </Marker>
+
+                    {/* CONDITIONAL RENDER: CLUSTERS vs POINTS */}
+
+                    {showClusters ? (
+                        // --- CLUSTER VIEW ---
+                        clusters.map(cluster => (
+                            <ClusterMarker key={cluster.city} cluster={cluster} />
+                        ))
+                    ) : (
+                        // --- DETAIL POINT VIEW ---
+                        scatterPoints.map(pt => (
+                            <Marker
+                                key={pt.job.id}
+                                position={[pt.lat, pt.lng]}
+                                icon={jobIcon(pt.job.status || 'NEW')}
+                                eventHandlers={{
+                                    click: () => onJobClick(pt.job)
+                                }}
                             >
-                                <span className="font-bold text-red-600 text-xs">{clusterJobs.length}</span>
-                            </div>
+                                <Popup>
+                                    <div className="min-w-[200px]">
+                                        <h4 className="font-bold text-sm text-slate-800">{pt.job.title}</h4>
+                                        <div className="text-xs text-slate-500 mb-2">{pt.job.company} • {pt.job.location}</div>
+                                        <button
+                                            onClick={() => onJobClick(pt.job)}
+                                            className="w-full bg-blue-600 text-white text-xs py-1.5 rounded hover:bg-blue-700 transition"
+                                        >
+                                            Voir l'offre
+                                        </button>
+                                    </div>
+                                </Popup>
+                            </Marker>
+                        ))
+                    )}
 
-                            {/* Tooltip */}
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-slate-800 text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-30 transition-opacity">
-                                {clusterJobs.length} offre(s) à {city.charAt(0).toUpperCase() + city.slice(1)}
-                            </div>
-                        </div>
-                    );
-                })}
+                </MapContainer>
             </div>
 
-            {/* Legend / Unknowns */}
-            <div className="h-32 bg-white border-t border-slate-200 p-4 overflow-x-auto flex gap-4">
-                <div className="min-w-[200px] flex flex-col justify-center border-r border-slate-100 pr-4">
-                    <h4 className="font-bold text-slate-700">Légende</h4>
-                    <div className="flex items-center gap-2 text-sm text-slate-600">
-                        <span className="w-3 h-3 bg-blue-500 rounded-full"></span> Domicile (Obourg)
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-slate-600">
-                        <span className="w-3 h-3 border-2 border-red-500 rounded-full"></span> Offres
-                    </div>
+            {/* Legend Overlay */}
+            <div className="bg-white border-t border-slate-200 p-3 flex gap-6 text-xs text-slate-600 shrink-0 z-10 relative">
+                <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 bg-indigo-600 rounded-full border border-white shadow-sm"></span> Domicile
                 </div>
-
-                {unknowns.length > 0 && (
-                    <div className="flex-1 flex flex-col justify-center">
-                        <h4 className="font-bold text-slate-700 mb-2">Autres localisations ({unknowns.length})</h4>
-                        <div className="flex gap-2">
-                            {unknowns.slice(0, 5).map(j => (
-                                <div key={j.id} className="bg-slate-50 border border-slate-200 px-3 py-1 rounded text-xs text-slate-600 truncate max-w-[150px]" title={j.location}>
-                                    {j.location}: {j.title}
-                                </div>
-                            ))}
-                            {unknowns.length > 5 && <span className="text-xs text-slate-400 self-center">...</span>}
-                        </div>
-                    </div>
-                )}
+                <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 bg-red-500 rounded-full border border-white shadow-sm"></span> Offre
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 bg-green-500 rounded-full border border-white shadow-sm"></span> Déjà postulé
+                </div>
+                <div className="ml-auto text-slate-400 italic">
+                    {showClusters ? "Zoomer pour voir les détails" : "Vue détaillée active"} - {currentZoom}x
+                </div>
             </div>
         </div>
     );
 };
+

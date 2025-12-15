@@ -22,6 +22,8 @@
     "vite": "^7.2.4"
   },
   "dependencies": {
+    "@types/leaflet": "^1.9.21",
+    "@types/react-leaflet": "^2.8.3",
     "axios": "^1.13.2",
     "body-parser": "^2.2.1",
     "cheerio": "^1.1.2",
@@ -29,11 +31,13 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "leaflet": "^1.9.4",
     "lucide-react": "^0.556.0",
     "nodemailer": "^7.0.11",
     "pdfkit": "^0.17.2",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
+    "react-leaflet": "^5.0.0",
     "rss-parser": "^3.13.0",
     "tailwind-merge": "^3.4.0"
   }

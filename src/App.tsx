@@ -68,12 +68,36 @@ function App() {
         };
 
         const processMockJobs = () => {
-            // Use mock jobs directly (Removed 100x duplication)
-            const jobsWithScores = mockJobs.map(job => {
+            // Generate ~3000 jobs primarily based on the real ones
+            let allJobs: JobOffer[] = [];
+
+            // 1. Add real valid jobs
+            allJobs = [...mockJobs];
+
+            // 2. Generate duplicates with slight variations to reach 3000
+            const TARGET_COUNT = 3000;
+            let counter = 0;
+
+            while (allJobs.length < TARGET_COUNT) {
+                mockJobs.forEach(template => {
+                    if (allJobs.length >= TARGET_COUNT) return;
+
+                    counter++;
+                    const newJob = {
+                        ...template,
+                        id: `generated-${counter}-${template.id}`,
+                        date: new Date(Date.now() - Math.floor(Math.random() * 10 * 24 * 60 * 60 * 1000)).toISOString(), // Random date last 10 days
+                        aiFitScore: Math.max(1, Math.min(5, (template.aiFitScore || 3) + (Math.random() * 0.4 - 0.2))) // Slight score variation
+                    };
+                    allJobs.push(newJob);
+                });
+            }
+
+            const jobsWithScores = allJobs.map(job => {
                 const match = calculateMatch(job);
                 return {
                     ...job,
-                    aiFitScore: match.score,
+                    aiFitScore: match.score, // Use real score for everything
                     weaknesses: match.weaknesses,
                     strengths: match.strengths,
                     status: 'NEW'

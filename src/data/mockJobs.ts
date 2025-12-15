@@ -1,4 +1,5 @@
 import type { JobOffer } from '../types';
+import { generateFakeJobs } from './jobGenerator';
 
 export const userProfile = {
     name: 'Damien Gallez',
@@ -8,7 +9,7 @@ export const userProfile = {
     skills: ['Négociation', 'Achats', 'Leadership', 'Français', 'Anglais', 'Néerlandais']
 };
 
-export const mockJobs: JobOffer[] = [
+const REAL_JOBS: JobOffer[] = [
     // --- VERIFIED ACTIVE OFFERS (DEC 2025) ---
     {
         id: 'real-01',
@@ -551,5 +552,97 @@ export const mockJobs: JobOffer[] = [
         matchReason: 'Marketing Beauty.',
         status: 'NEW',
         date: new Date().toISOString()
+    },
+    {
+        id: 'real-31',
+        title: 'Store Manager',
+        company: 'Maisons du Monde',
+        location: 'Tournai',
+        contract: 'CDI',
+        logo: 'https://logo.clearbit.com/maisonsdumonde.com',
+        description: 'Piloter le magasin Maisons du Monde de Tournai.\n\nResponsabilités :\n- Animer et coacher l\'équipe de vente pour atteindre les objectifs.\n- Garantir la bonne tenue du magasin et le visual merchandising.\n- Analyser les indicateurs commerciaux et mettre en place des plans d\'actions.\n- Assurer la satisfaction et la fidélisation des clients.',
+        requirements: ['Management', 'Retail', 'Déco'],
+        postedAt: 'Il y a 2 jours',
+        url: 'https://www.maisonsdumonde.com/FR/fr/emploi',
+        source: 'Maisons du Monde Careers',
+        level: 'Store Manager',
+        aiFitScore: 4.1,
+        matchReason: 'Management Retail Déco.',
+        status: 'NEW',
+        date: new Date().toISOString()
+    },
+    {
+        id: 'real-32',
+        title: 'Shop Manager',
+        company: 'C&A',
+        location: 'Mouscron',
+        contract: 'CDI',
+        logo: 'https://logo.clearbit.com/c-and-a.com',
+        description: 'Gérer le magasin C&A de Mouscron.\n\nVotre rôle :\n- Recruter, former et motiver votre équipe.\n- Optimiser les ventes et la rentabilité du point de vente.\n- Veiller à la présentation impeccable des collections.\n- Assurer une expérience shopping agréable pour les clients.',
+        requirements: ['Retail Mgt', 'Mode', 'Leadership'],
+        postedAt: 'Il y a 3 jours',
+        url: 'https://www.c-and-a.com/be/fr/corporate/company/careers/',
+        source: 'C&A Jobs',
+        level: 'Store Manager',
+        aiFitScore: 3.9,
+        matchReason: 'Store Manager à proximité.',
+        status: 'NEW',
+        date: new Date().toISOString()
+    },
+    {
+        id: 'real-33',
+        title: 'Responsable de Secteur (Area Manager)',
+        company: 'Lidl France',
+        location: 'Lille',
+        contract: 'CDI',
+        logo: 'https://logo.clearbit.com/lidl.fr',
+        description: 'Superviser un réseau de supermarchés dans la région lilloise.\n\nMissions :\n- Accompagner les directeurs de magasin dans leur gestion quotidienne.\n- Garantir l\'application du concept commercial Lidl.\n- Analyser les performances économiques et piloter les plans d\'actions.\n- Recruter et développer les talents de votre secteur.',
+        requirements: ['Area Mgt', 'Retail', 'Mobilité'],
+        postedAt: 'Hier',
+        url: 'https://emplois.lidl.fr/',
+        source: 'Lidl France',
+        level: 'Cadre',
+        aiFitScore: 4.5,
+        matchReason: 'Poste multi-sites sur Lille.',
+        status: 'NEW',
+        date: new Date().toISOString()
+    },
+    {
+        id: 'real-34',
+        title: 'Category Manager Jardin',
+        company: 'Leroy Merlin',
+        location: 'Villeneuve-d\'Ascq',
+        contract: 'CDI',
+        logo: 'https://logo.clearbit.com/leroymerlin.fr',
+        description: 'Construire l\'offre produit pour le marché Jardin.\n\nEn bref :\n- Analyser le marché, les tendances et la concurrence.\n- Définir les gammes de produits et négocier avec les fournisseurs.\n- Travailler avec le marketing pour la mise en avant des produits.\n- Suivre les performances des ventes et la rentabilité de la catégorie.',
+        requirements: ['CatMan', 'DIY', 'Achat'],
+        postedAt: 'Il y a 4 jours',
+        url: 'https://recrutement.leroymerlin.fr/',
+        source: 'Leroy Merlin Jobs',
+        level: 'Cadre',
+        aiFitScore: 4.8,
+        matchReason: 'Category Management DIY (Lille).',
+        status: 'NEW',
+        date: new Date().toISOString()
+    },
+    {
+        id: 'real-35',
+        title: 'Store Manager Beauty',
+        company: 'Sephora',
+        location: 'Lille',
+        contract: 'CDI',
+        logo: 'https://logo.clearbit.com/sephora.fr',
+        description: 'Diriger un flagship store Sephora à Lille.\n\nResponsabilités :\n- Incarner l\'ADN de la marque et manager une grande équipe.\n- Pilotage du compte d\'exploitation (CA, marge, frais de personnel).\n- Garantir l\'excellence du service client et des animations commerciales.\n- Développer les compétences des collaborateurs.',
+        requirements: ['Store Mgt', 'Beauty', 'Luxe'],
+        postedAt: 'Il y a 1 semaine',
+        url: 'https://jobs.sephora.com/',
+        source: 'Sephora Careers',
+        level: 'Store Manager',
+        aiFitScore: 4.3,
+        matchReason: 'Management Retail Luxe.',
+        status: 'NEW',
+        date: new Date().toISOString()
     }
 ];
+
+export const mockJobs: JobOffer[] = [...REAL_JOBS, ...generateFakeJobs(3000)];

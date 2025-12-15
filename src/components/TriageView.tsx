@@ -8,7 +8,7 @@ import { CheckCircle, X, ChevronLeft, ChevronRight, Map as MapIcon, Grid } from 
 interface TriageViewProps {
     jobs: JobOffer[];
     profile: Profile;
-    onAction: (id: string, action: 'INTERESTED' | 'REJECTED') => void;
+    onAction: (id: string, action: 'INTERESTED' | 'REJECTED' | 'APPLIED') => void;
     onJobUpdate: (jobId: string, updates: Partial<JobOffer>) => void;
 }
 
@@ -38,10 +38,27 @@ export function TriageView({ jobs, profile, onAction, onJobUpdate }: TriageViewP
         return sortedJobs.slice(start, start + ITEMS_PER_PAGE);
     }, [sortedJobs, currentPage]);
 
-    const handleAction = (id: string, action: 'INTERESTED' | 'REJECTED') => {
-        onAction(id, action);
+    const handleAction = (id: string, action: 'INTERESTED' | 'REJECTED' | 'APPLIED' | 'NEXT') => {
+        // Find current index to determine next job
+        const currentIndex = sortedJobs.findIndex(j => j.id === id);
+        let nextJob: JobOffer | null = null;
+
+        if (currentIndex !== -1 && currentIndex < sortedJobs.length - 1) {
+            nextJob = sortedJobs[currentIndex + 1];
+        }
+
+        // Propagate action if it's not just "NEXT"
+        if (action !== 'NEXT') {
+            onAction(id, action);
+        }
+
+        // Auto-advance logic
         if (selectedJob?.id === id) {
-            setSelectedJob(null);
+            if (nextJob) {
+                setSelectedJob(nextJob);
+            } else {
+                setSelectedJob(null); // No more jobs
+            }
         }
     };
 
@@ -97,7 +114,7 @@ export function TriageView({ jobs, profile, onAction, onJobUpdate }: TriageViewP
                             <div key={job.id} className="transform transition-all duration-300 hover:scale-[1.02] h-full">
                                 <JobCard
                                     job={job}
-                                    onAction={(action) => handleAction(job.id, action === 'APPLIED' ? 'INTERESTED' : action)}
+                                    onAction={(action) => handleAction(job.id, action)}
                                     onClick={() => setSelectedJob(job)}
                                     compact={true}
                                 />
@@ -161,8 +178,7 @@ export function TriageView({ jobs, profile, onAction, onJobUpdate }: TriageViewP
                             }}
                             onAction={(action) => {
                                 if (selectedJob) {
-                                    handleAction(selectedJob.id, action as any);
-                                    setSelectedJob(null);
+                                    handleAction(selectedJob.id, action);
                                 }
                             }}
                         />
@@ -172,4 +188,5 @@ export function TriageView({ jobs, profile, onAction, onJobUpdate }: TriageViewP
         </div>
     );
 }
+
 

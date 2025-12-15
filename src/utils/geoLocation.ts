@@ -1,30 +1,7 @@
-// Coordinates for Obourg (Mons)
-const OBOURG = { lat: 50.4981, lon: 4.0628 };
+import { CITY_COORDINATES } from './geoUtils';
 
-// Major Belgian Cities Mapping (approximate centers)
-const CITY_COORDS: Record<string, { lat: number; lon: number }> = {
-    'Bruxelles': { lat: 50.8503, lon: 4.3517 },
-    'Brussels': { lat: 50.8503, lon: 4.3517 },
-    'Anvers': { lat: 51.2194, lon: 4.4025 },
-    'Antwerpen': { lat: 51.2194, lon: 4.4025 },
-    'Gand': { lat: 51.0543, lon: 3.7174 },
-    'Gent': { lat: 51.0543, lon: 3.7174 },
-    'Charleroi': { lat: 50.4101, lon: 4.4443 },
-    'Liège': { lat: 50.6326, lon: 5.5797 },
-    'Namur': { lat: 50.4674, lon: 4.8720 },
-    'Mons': { lat: 50.4542, lon: 3.9567 },
-    'Louvain': { lat: 50.8798, lon: 4.7005 },
-    'Leuven': { lat: 50.8798, lon: 4.7005 },
-    'Bruges': { lat: 51.2093, lon: 3.2247 },
-    'Brugge': { lat: 51.2093, lon: 3.2247 },
-    'Hasselt': { lat: 50.9307, lon: 5.3325 },
-    'Wavre': { lat: 50.7162, lon: 4.6083 },
-    'Tournai': { lat: 50.6059, lon: 3.3813 },
-    'Arlon': { lat: 49.6833, lon: 5.8167 },
-    'Zaventem': { lat: 50.8804, lon: 4.4754 },
-    'Malines': { lat: 51.0259, lon: 4.4770 },
-    'Mechelen': { lat: 51.0259, lon: 4.4770 }
-};
+// Coordinates for Obourg (Mons)
+const OBOURG = { lat: 50.4761, lon: 4.0061 }; // Updated to match geoUtils precision
 
 function toRad(value: number) {
     return (value * Math.PI) / 180;
@@ -44,25 +21,35 @@ function calculateDistanceKM(lat1: number, lon1: number, lat2: number, lon2: num
 }
 
 export function getDistanceFromObourg(location: string): number {
-    if (!location) return 0; // Default if unknown
+    if (!location) return 999; // Unknown location = far away
 
-    // Handle "National" or broad scopes as 0 so they are always included
-    if (location.toLowerCase().includes('national') || location.toLowerCase().includes('belgique') || location.toLowerCase().includes('remote')) {
-        return 0;
+    const locLower = location.toLowerCase();
+
+    // Handle "National" or broad scopes as 0 so they are always included?
+    // User requested strict distance. National jobs usually don't have a specific location.
+    // Let's keep them as 0 only if explicitly stated, otherwise strict check.
+    if (locLower.includes('remote') || locLower.includes('télétravail')) {
+        return 0; // Always show remote
     }
 
-    // Try to find a known city in the location string
-    for (const [city, coords] of Object.entries(CITY_COORDS)) {
-        if (location.toLowerCase().includes(city.toLowerCase())) {
-            return calculateDistanceKM(OBOURG.lat, OBOURG.lon, coords.lat, coords.lon);
+    // Direct lookup in our comprehensive DB
+    // CITY_COORDINATES keys are usually lowercase in the definition, but mapped from capitalized in generator.
+    // let's try direct match first then scan.
+
+    // keys in geoUtils are lowercase!
+    if (CITY_COORDINATES[locLower]) {
+        const coords = CITY_COORDINATES[locLower];
+        return calculateDistanceKM(OBOURG.lat, OBOURG.lon, coords.lat, coords.lng);
+    }
+
+    // Scan for substrings (e.g. location="Mons (7000)")
+    for (const [city, coords] of Object.entries(CITY_COORDINATES)) {
+        if (locLower.includes(city.toLowerCase())) {
+            return calculateDistanceKM(OBOURG.lat, OBOURG.lon, coords.lat, coords.lng);
         }
     }
 
-    // Fallback: If we can't find specific city, assume 0 (e.g. Obourg itself, or parsing error) 
-    // Wait, if it's "Paris", we don't want to show it as 0. 
-    // But since we only mock Belgian cities, if it's not in our list, it might be obscure.
-    // Let's return 0 to be safe (show it) rather than hide potentially good result.
-    // Or return very high distance?
-    // Given the user wants to Filter, showing "unknowns" is safer than hiding.
-    return 0;
+    // Fallback: If unknown, it shouldn't be 0. It should be filtered out.
+    // e.g. "Paris" (if not in DB) is > 10km.
+    return 9999;
 }
